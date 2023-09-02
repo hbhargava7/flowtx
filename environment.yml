@@ -1,0 +1,10 @@
+# Conda environment
+# conda env create -f environment.yml --force -v
+
+name: flowtx
+
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - -r requirements.txt

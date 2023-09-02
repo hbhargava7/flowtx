@@ -1,0 +1,7 @@
+numpy
+scipy
+pandas
+matplotlib
+ipykernel
+bokeh
+flowkit @ file:///Users/hbhargava/Drive/Projects/Code/FlowKit

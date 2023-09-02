@@ -1,0 +1,39 @@
+[project]
+
+name = "flowtx"
+
+version = "0.0.1"  # Required
+
+description = "FlowTx: A Python package for analyzing flow cytometry experiments."
+
+readme = "README.md" # Optional
+
+requires-python = ">=3.8"
+
+license = {file = "LICENSE.txt"}
+
+keywords = ["flow cytometry", "cell engineering", "lab", "biology"]
+
+authors = [
+  {name = "Hersh K. Bhargava", email = "hello@hershbhargava.com" }
+]
+maintainers = [
+  {name = "Hersh K. Bhargava", email = "hello@hershbhargava.com" }
+]
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+]
+
+dynamic = ["dependencies"]
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]  
+Homepage = "https://github.com/hbhargava7/flowtx"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
