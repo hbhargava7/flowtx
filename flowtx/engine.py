@@ -187,3 +187,25 @@ class Engine():
         plt.tight_layout()
 
         return fig
+
+    def get_raw_events_for_sample(self, sample_id, channel_name, gate_name, transform=False):
+        sample = self.wsp.get_sample(sample_id)
+        channel_index = sample.get_channel_index(channel_name)
+        x = sample.get_channel_events(channel_index, source='raw', subsample=False)
+
+        # for transform
+        if transform:
+            x_transform = self.wsp.get_transform(sample_id, channel_name)
+            x = x_transform.apply(x)
+
+        gate_results = self.wsp.get_gating_results(sample_id=sample_id)
+        is_gate_event = gate_results.get_gate_membership(gate_name)
+
+        is_subsample = np.zeros(sample.event_count, dtype=bool)
+        is_subsample[sample.subsample_indices] = True
+
+        idx_to_plot = np.logical_and(is_gate_event, is_subsample)
+
+        x = x[idx_to_plot]
+
+        return x
