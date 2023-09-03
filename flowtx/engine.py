@@ -52,8 +52,13 @@ class Engine():
 
         self.gating_results = self.wsp.get_analysis_report()
 
-    @property
-    def df(self):
+        self.rebuild_df()
+
+
+    def rebuild_df(self):
+        """
+        Rebuild the dataframe from the samples.
+        """
         # Comprehend dicts into columns
         flattened = []
         for sample in self.samples:
@@ -66,8 +71,8 @@ class Engine():
                     s[key] = sample[key]
 
             flattened.append(s)
-        
-        return pd.DataFrame(flattened)
+
+        self.df = pd.DataFrame(flattened)
 
 
     def add_sample(self, condition_specifier: dict, well_specifier: dict, data_address: str = None) -> None:
@@ -82,6 +87,8 @@ class Engine():
         sample['gate_counts'] = gate_counts
 
         self.samples.append(sample)
+
+        self.rebuild_df()
 
     def report(self):
         """
@@ -138,7 +145,7 @@ class Engine():
             print('Sample not found in workspace.')
             return None
 
-    def plot_timecourses(self, rows_field, cols_field, fields_to_plot, time_col):
+    def plot_timecourses(self, rows_field, cols_field, fields_to_plot, time_col, gate_cols_prefix=None, df=None, twinax=True):
         """
         Plot the raw timecourses for each condition.
 
@@ -155,12 +162,14 @@ class Engine():
             Name of the column in the dataframe that contains the time values.
 
         """
+        if df is None:
+            df = self.df
 
         default_colors = mpl.rcParams['axes.prop_cycle'].by_key()['color']
         default_colors = ['black', 'blue', 'red']
 
-        col_values = self.df[cols_field].unique()
-        row_values = self.df[rows_field].unique()
+        col_values = df[cols_field].unique()
+        row_values = df[rows_field].unique()
 
         fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(3.4*len(col_values), 3.5*len(row_values)), sharey=True)
         fig.suptitle('Raw Data', fontsize=30)
@@ -185,17 +194,21 @@ class Engine():
                 ax = axs[i, j]
                 ax.set_title('%s \n %s' % (col_name, row_name))
                 
-                hax = ax.twinx()
-                haxs.append(hax)
+                if twinax:
+                    hax = ax.twinx()
+                    haxs.append(hax)
 
-                target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] == row_name)]
+                target = df[(df[cols_field] == col_name) & (df[rows_field] == row_name)]
 
                 if isinstance(fields_to_plot, str):
                     gates = target[fields_to_plot].iloc[0]
 
                     gate_cols = []
                     for gate in gates:
-                        gate_cols.append('gate_counts count %s' % gate)
+                        if gate_cols_prefix:
+                            gate_cols.append('%sgate_counts count %s' % (gate_cols_prefix, gate))
+                        else:
+                            gate_cols.append('gate_counts count %s' % gate)
 
                     _fields_to_plot = gate_cols
                     # print(fields_to_plot)
@@ -207,7 +220,7 @@ class Engine():
                     color = default_colors[k % len(default_colors)]
 
                     # Plot the second species on the twinned axis.
-                    if len(_fields_to_plot) > 1 and k == 1:
+                    if len(_fields_to_plot) > 1 and k == 1 and twinax:
                         tax = hax
                         tax.spines['right'].set_color(color)
                         tax.yaxis.label.set_color(color)
@@ -222,29 +235,34 @@ class Engine():
                         ax.set_ylabel('')
 
                     # Only the last column gets a twinned y-axis label
-                    if j != len(col_values) - 1:
+                    if j != len(col_values) - 1 and twinax:
                         hax.set_ylabel('')
                         
                     if j == 0:
-                        handles1, labels1 = ax.get_legend_handles_labels()
-                        handles2, labels2 = hax.get_legend_handles_labels()
+                        if twinax:
+                            handles1, labels1 = ax.get_legend_handles_labels()
+                            handles2, labels2 = hax.get_legend_handles_labels()
 
-                        all_handles = handles1 + handles2
-                        all_labels = labels1 + labels2
+                            all_handles = handles1 + handles2
+                            all_labels = labels1 + labels2
 
-                        unique_labels, idx = np.unique(all_labels, return_index=True)
-                        unique_handles = [all_handles[i] for i in idx]
+                            unique_labels, idx = np.unique(all_labels, return_index=True)
+                            unique_handles = [all_handles[i] for i in idx]
 
-                        ax.legend(unique_handles, unique_labels)
+                            ax.legend(unique_handles, unique_labels)
+                        else:
+                            ax.legend()
                     else:
                         tax.legend([],[], frameon=False)
                         ax.legend([],[], frameon=False)
 
         # After all plotting operations, synchronize y-limits across all twinned axes
-        set_shared_ylims()
+        if twinax:
+            set_shared_ylims()
         plt.tight_layout()
 
         return fig
+
 
     def get_raw_events_for_sample(self, sample_id, channel_name, gate_name, transform=False):
         sample = self.wsp.get_sample(sample_id)
@@ -306,3 +324,42 @@ class Engine():
 
         plt.tight_layout()
         return fig
+    
+    @staticmethod
+    def normalize_data(df):
+
+        def compute_normalization_factors(df):
+            # Filter for timepoint zero
+            timepoint_zero = df[df['well timepoint'] == 0]
+            
+            # Compute mean for each combination of `condition effectors` and `condition condition`
+            mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean().reset_index()
+
+            return mean_values
+        
+
+        mean_values = compute_normalization_factors(df)
+        gate_counts_columns = [col for col in df.columns if 'gate_counts' in col]
+        
+        # Create a copy of df to store normalized values
+        normalized_df = df.copy()
+
+        for col in gate_counts_columns:
+            new_col_name = f"normalized_{col}"
+            
+            normalized_df = pd.merge(normalized_df, 
+                                    mean_values[['condition effectors', 'condition condition', col]], 
+                                    on=['condition effectors', 'condition condition'], 
+                                    how='left', 
+                                    suffixes=('', '_mean'))
+            
+            normalized_df[new_col_name] = normalized_df[col] / normalized_df[f"{col}_mean"]
+            normalized_df.drop(f"{col}_mean", axis=1, inplace=True)
+        
+        return normalized_df
+    
+    def normalize_counts(self):
+        """
+        Normalize the counts by the counts at timepoint zero.
+        """
+        self.df = self.normalize_data(self.df)
