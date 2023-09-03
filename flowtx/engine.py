@@ -209,3 +209,42 @@ class Engine():
         x = x[idx_to_plot]
 
         return x
+
+    def plot_histograms(self, rows_field, cols_field, channel_name, gate_name, transform=False, wells='A|D'):
+        """
+        Plot histograms for each condition using raw events.
+        """
+
+        default_colors = mpl.rcParams['axes.prop_cycle'].by_key()['color']
+        default_colors = ['black', 'blue', 'red']
+
+        col_values = self.df[cols_field].unique()
+        row_values = self.df[rows_field].unique()
+
+        fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(3.4*len(col_values), 3.5*len(row_values)), sharey=True)
+        fig.suptitle('Raw Data Histograms', fontsize=30)
+
+        for j, col_name in enumerate(col_values):
+            for i, row_name in enumerate(row_values):
+                ax = axs[i, j]
+                ax.set_title('%s \n %s' % (col_name, row_name))
+                
+                target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] == row_name) & (self.df['well wells'].str.contains(wells))]
+                sample_ids = target['data_address'].unique()  # Assuming each target dataframe has unique sample_ids
+                timepoints = target['well timepoint'].unique()
+                for k, sample_id in enumerate(sample_ids):
+                    raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+                    
+                    color = default_colors[j % len(default_colors)]
+                    # sns.histplot(raw_data, ax=ax, color=color, label=row_name)
+                    sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True)
+
+                if j != 0:  # Only the first row gets a base y-axis label
+                    ax.set_ylabel('')
+                if i == 0 and j == 0:
+                    ax.legend()
+                else:
+                    ax.legend([],[], frameon=False)
+
+        plt.tight_layout()
+        return fig
