@@ -12,6 +12,7 @@ import pickle
 import os
 
 class Engine():
+
     def __init__(self, wsp_path: str=None, use_cache: bool=True, cache_path: str="wsp_cache.pkl"):
         """Main class for flow data handling
 
@@ -49,6 +50,8 @@ class Engine():
                     pickle.dump(self.wsp, f)
                 print('Cached the FlowKit Workspace (wsp) object.')
 
+        self.gating_results = self.wsp.get_analysis_report()
+
     @property
     def df(self):
         # Comprehend dicts into columns
@@ -80,6 +83,37 @@ class Engine():
 
         self.samples.append(sample)
 
+    def report(self):
+        """
+        Report on data. This assumes all the samples have the same gating strategy and channels.
+
+        """
+        # Get the first sample
+        sample_id = self.wsp.get_sample_ids()[0]
+        sample = self.wsp.get_sample(sample_id)
+        print('Fluorescence Channels:')
+        print('-'*40)
+        print(sample.channels['pnn'])
+
+        # Get the gating strategy
+        sample_id = self.wsp.get_sample_ids()[0]
+
+        gating_results = self.wsp.get_analysis_report()
+
+        sample_results = gating_results[gating_results['sample'] == sample_id]
+
+        gates = sample_results['gate_name'].unique()
+
+        print('Gates')
+        print('-'*40)
+        for gate in gates:
+            print("Gate: %s" % gate)
+
+        print('Gate Tree')
+        print('-'*40)
+        print(self.wsp.get_gate_hierarchy(sample_id))
+        
+
     def gate_counts_for_sample_data(self, data_address: str):
 
         # Try to find the sample in the FlowJo workspace
@@ -87,14 +121,12 @@ class Engine():
  
         if data_address in sample_ids:
             
-            sample = self.wsp.get_sample(data_address)
+            # sample = self.wsp.get_sample(data_address)
 
             # Hierarchy for sample
             # print(self.wsp.get_gate_hierarchy(data_address))
 
-            gating_results = self.wsp.get_analysis_report()
-
-            sample_results = gating_results[gating_results['sample'] == data_address]
+            sample_results = self.gating_results[self.gating_results['sample'] == data_address]
 
             gate_counts = {}
 
@@ -109,6 +141,18 @@ class Engine():
     def plot_timecourses(self, rows_field, cols_field, fields_to_plot, time_col):
         """
         Plot the raw timecourses for each condition.
+
+        Parameters
+        ----------
+        rows_field : str
+            Name of the column in the dataframe that contains the row values.
+        cols_field : str
+            Name of the column in the dataframe that contains the column values.
+        fields_to_plot : list or str
+            List of column names in the dataframe to plot.
+            Or str column name that contains the gate names to plot.
+        time_col : str
+            Name of the column in the dataframe that contains the time values.
 
         """
 
@@ -134,7 +178,7 @@ class Engine():
             """Sets the y-limits of all twinned axes to the global y-limits."""
             ylims = get_global_ylims()
             for h in haxs:
-                h.set_ylim(ylims)
+                h.set_ylim(ylims)            
 
         for j, col_name in enumerate(col_values):
             for i, row_name in enumerate(row_values):
@@ -146,10 +190,24 @@ class Engine():
 
                 target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] == row_name)]
 
-                for k, readout_name in enumerate(fields_to_plot):
+                if isinstance(fields_to_plot, str):
+                    gates = target[fields_to_plot].iloc[0]
+
+                    gate_cols = []
+                    for gate in gates:
+                        gate_cols.append('gate_counts count %s' % gate)
+
+                    _fields_to_plot = gate_cols
+                    # print(fields_to_plot)
+
+                else:
+                    _fields_to_plot = fields_to_plot
+
+                for k, readout_name in enumerate(_fields_to_plot):
                     color = default_colors[k % len(default_colors)]
 
-                    if len(fields_to_plot) > 1 and k == len(fields_to_plot) - 1:
+                    # Plot the second species on the twinned axis.
+                    if len(_fields_to_plot) > 1 and k == 1:
                         tax = hax
                         tax.spines['right'].set_color(color)
                         tax.yaxis.label.set_color(color)
@@ -167,7 +225,7 @@ class Engine():
                     if j != len(col_values) - 1:
                         hax.set_ylabel('')
                         
-                    if i == 0 and j == 0:
+                    if j == 0:
                         handles1, labels1 = ax.get_legend_handles_labels()
                         handles2, labels2 = hax.get_legend_handles_labels()
 
