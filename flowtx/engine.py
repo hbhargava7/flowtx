@@ -363,3 +363,67 @@ class Engine():
         Normalize the counts by the counts at timepoint zero.
         """
         self.df = self.normalize_data(self.df)
+
+
+    def visualize_t0_counts(self, counts_col, df=None):
+        """
+        Visualize the specified column from the dataframe with thresholds for outlier detection.
+        
+        Parameters
+        ----------
+        df : DataFrame
+            The dataframe containing the data to be visualized.
+        counts_col : str
+            The column name of the data to be plotted on the y-axis.
+        
+        Returns
+        -------
+        fig : Figure
+            A matplotlib Figure object containing the generated plot.
+
+        """
+
+        if df is None:
+            df = self.df[self.df['well timepoint'] == 0]
+
+        # Create a figure and axis object
+        fig, ax = plt.subplots(figsize=(10,), dpi=300)
+
+        # Generate the x-values
+        x_values = range(len(df))
+
+        # Scatter plot with Seaborn
+        sns.scatterplot(x=x_values, y=df[counts_col], hue=df['condition effectors'], ax=ax)
+
+        # Optional styling
+        ax.set_xlabel('Sample Index')
+        ax.set_ylabel(counts_col)
+        ax.legend(title='condition effector', loc='upper left', bbox_to_anchor=(1, 1))
+
+        # Determine quantiles and outlier thresholds
+        Q1 = df[counts_col].quantile(0.25)
+        Q3 = df[counts_col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_threshold = Q1 - 1.5 * IQR
+        upper_threshold = Q3 + 1.5 * IQR
+
+        # Draw lines for quantiles and thresholds
+        ax.axhline(y=lower_threshold, color='grey', linestyle='--', label='Lower Threshold', alpha=0.5)
+        ax.axhline(y=upper_threshold, color='grey', linestyle='--', label='Upper Threshold', alpha=0.5)
+
+        # Add text labels for the thresholds
+        ax.text(x_values[-1] + 0.5, lower_threshold, 'Lower Threshold (Q1 - 1.5 * IQR)', verticalalignment='bottom', horizontalalignment='right', color='grey')
+        ax.text(x_values[-1] + 0.5, upper_threshold, 'Upper Threshold (Q3 + 1.5 * IQR)', verticalalignment='bottom', horizontalalignment='right', color='grey')
+
+        for idx, x_val in enumerate(x_values):
+            current_value = df.iloc[idx][counts_col]
+            if current_value < lower_threshold or current_value > upper_threshold:
+                ax.text(x_val, current_value, f"{df.iloc[idx]['well plate']} {df.iloc[idx]['well wells']}")
+
+        plt.tight_layout()
+        
+        return fig
+
+    # Sample usage (assuming you have a DataFrame `sample_df`):
+    # fig = visualize_t0_plate(sample_df, "some_column_name")
+    # fig.savefig("output.png")
