@@ -12,7 +12,7 @@ import pickle
 import os
 from typing import Optional
 
-class Engine:
+class FlowEngine:
 
     wsp: fk.Workspace
 
