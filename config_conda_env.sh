@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 
 # Create the Conda environment
 conda env create -f environment.yml --force -v
