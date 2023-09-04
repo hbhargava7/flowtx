@@ -7,3 +7,4 @@ bokeh
 # flowkit @ file:///Users/hbhargava/Drive/Projects/Code/FlowKit
 # Until flowkit update is merged
 flowkit @ git+https://github.com/hbhargava7/flowkit@hkb-add-autoread-fcs-from-flowjo
+pytest
