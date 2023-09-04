@@ -10,10 +10,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import os
+from typing import Optional
 
-class Engine():
+class Engine:
 
-    def __init__(self, wsp_path: str=None, use_cache: bool=True, cache_path: str="wsp_cache.pkl"):
+    wsp: fk.Workspace
+
+    def __init__(self, wsp_path: Optional[str] = None, use_cache: bool = True, cache_path: str = "wsp_cache.pkl"):
         """Main class for flow data handling
 
         Parameters
@@ -27,6 +30,7 @@ class Engine():
             Path to the cached wsp object, by default "wsp_cache.pkl".
 
         """
+
         self.samples = []
 
         if use_cache and os.path.exists(cache_path):
@@ -229,7 +233,7 @@ class Engine():
                         tax = ax
 
                     sns.scatterplot(ax=tax, x=time_col, y=readout_name, data=target, color=color, legend=False)
-                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=target, label=readout_name, ci=None, color=color, legend=False)
+                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=target, label=readout_name, errorbar=None, color=color, legend=False)
 
                     if j != 0:  # Only the first row gets a base y-axis label
                         ax.set_ylabel('')
@@ -387,7 +391,7 @@ class Engine():
             df = self.df[self.df['well timepoint'] == 0]
 
         # Create a figure and axis object
-        fig, ax = plt.subplots(figsize=(10,), dpi=300)
+        fig, ax = plt.subplots(figsize=(10,3), dpi=300)
 
         # Generate the x-values
         x_values = range(len(df))
@@ -427,3 +431,106 @@ class Engine():
     # Sample usage (assuming you have a DataFrame `sample_df`):
     # fig = visualize_t0_plate(sample_df, "some_column_name")
     # fig.savefig("output.png")
+
+
+    def plot_timecourses_by_condition(self, effectors_list, df=None):
+        """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
+
+        Parameters
+        ----------
+        df : df, optional
+            _description_
+        effectors_list : list[str]
+            _description_
+        """
+        if df is None:
+            df = self.df
+        
+        df = df[df['condition effectors'].isin(effectors_list)]
+
+        # concatenate all the species_lists and then get the unique values
+        total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+
+        figs = []
+        # Plot each condition with each species as a subplot
+        for condition in df['condition condition'].unique():
+            fig, axs = plt.subplots(1, len(total_species_list), figsize=(len(total_species_list)*4 + 2, 4), dpi=300)
+            fig.suptitle(condition)
+
+            tdf = df[df['condition condition'] == condition]
+
+            for i, species in enumerate(total_species_list):
+                if species not in tdf['condition species_list'].iloc[0]:
+                    continue
+                for j, effector_condition in enumerate(tdf['condition effectors'].unique()):
+                    sdf = tdf[tdf['condition effectors'] == effector_condition]
+                    sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
+                                data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
+
+                    axs[i].set_title('%s | %s' % (condition, species))
+                    axs[i].set_xlabel('Time (hours)')
+                    axs[i].set_ylabel('Normalized Counts')
+
+                    # Remove legend for all but the last subplot
+                    if i < len(total_species_list) - 1:
+                        axs[i].legend().set_visible(False)
+
+            # Add legend to the right of the last subplot
+            axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
+
+            plt.tight_layout()
+            figs.append(fig)
+
+        return figs
+    
+    def plot_timecourses_by_effectors(self, effectors_list, df=None):
+        """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
+
+        Parameters
+        ----------
+        df : df, optional
+            _description_
+        effectors_list : list[str]
+            _description_
+        """
+        if df is None:
+            df = self.df
+        
+        df = df[df['condition effectors'].isin(effectors_list)]
+
+        # concatenate all the species_lists and then get the unique values
+        total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+
+        figs = []
+        # Plot each condition with each species as a subplot
+        # Plot for each effector condition with each species as a subplot
+        for effector_condition in effectors_list:
+            fig, axs = plt.subplots(1, len(total_species_list), figsize=(len(total_species_list)*4 + 2, 4), dpi=300)
+            fig.suptitle(effector_condition)
+            
+            # Filter by effector condition
+            edf = df[df['condition effectors'] == effector_condition]
+            
+            for i, species in enumerate(total_species_list):
+                
+                for j, condition in enumerate(edf['condition condition'].unique()):
+                    cdf = edf[edf['condition condition'] == condition]
+                    if species not in cdf['condition species_list'].iloc[0]:
+                        continue
+                    sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
+                                data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o')
+                    axs[i].set_title(species)
+                    axs[i].set_xlabel('Time (hours)')
+                    axs[i].set_ylabel('Normalized Counts')
+
+                    # Remove legend for all but the last subplot
+                    if i < len(total_species_list) - 1:
+                        axs[i].legend().set_visible(False)
+            
+            # Add legend to the right of the last subplot
+            axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
+            plt.tight_layout()
+
+            figs.append(fig)
+
+        return figs
