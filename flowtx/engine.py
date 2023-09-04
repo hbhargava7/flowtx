@@ -12,6 +12,7 @@ import pickle
 import os
 from typing import Optional
 
+
 class FlowEngine:
 
     wsp: fk.Workspace
@@ -58,7 +59,6 @@ class FlowEngine:
 
         self.rebuild_df()
 
-
     def rebuild_df(self):
         """
         Rebuild the dataframe from the samples.
@@ -77,7 +77,6 @@ class FlowEngine:
             flattened.append(s)
 
         self.df = pd.DataFrame(flattened)
-
 
     def add_sample(self, condition_specifier: dict, well_specifier: dict, data_address: str = None) -> None:
         sample = {}
@@ -123,15 +122,14 @@ class FlowEngine:
         print('Gate Tree')
         print('-'*40)
         print(self.wsp.get_gate_hierarchy(sample_id))
-        
 
     def gate_counts_for_sample_data(self, data_address: str):
 
         # Try to find the sample in the FlowJo workspace
-        sample_ids = self.wsp.get_sample_ids() # These are the FlowJo names
- 
+        sample_ids = self.wsp.get_sample_ids()  # These are the FlowJo names
+
         if data_address in sample_ids:
-            
+
             # sample = self.wsp.get_sample(data_address)
 
             # Hierarchy for sample
@@ -142,7 +140,8 @@ class FlowEngine:
             gate_counts = {}
 
             for gate_name in sample_results['gate_name'].unique():
-                gate_counts['count %s' % gate_name] = sample_results[sample_results['gate_name'] == gate_name]['count'].values[0]
+                gate_counts['count %s' % gate_name] = sample_results[sample_results['gate_name']
+                                                                     == gate_name]['count'].values[0]
 
             return gate_counts
         else:
@@ -175,7 +174,8 @@ class FlowEngine:
         col_values = df[cols_field].unique()
         row_values = df[rows_field].unique()
 
-        fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(3.4*len(col_values), 3.5*len(row_values)), sharey=True)
+        fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(
+            3.4*len(col_values), 3.5*len(row_values)), sharey=True)
         fig.suptitle('Raw Data', fontsize=30)
 
         haxs = []
@@ -191,13 +191,13 @@ class FlowEngine:
             """Sets the y-limits of all twinned axes to the global y-limits."""
             ylims = get_global_ylims()
             for h in haxs:
-                h.set_ylim(ylims)            
+                h.set_ylim(ylims)
 
         for j, col_name in enumerate(col_values):
             for i, row_name in enumerate(row_values):
                 ax = axs[i, j]
                 ax.set_title('%s \n %s' % (col_name, row_name))
-                
+
                 if twinax:
                     hax = ax.twinx()
                     haxs.append(hax)
@@ -233,7 +233,8 @@ class FlowEngine:
                         tax = ax
 
                     sns.scatterplot(ax=tax, x=time_col, y=readout_name, data=target, color=color, legend=False)
-                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=target, label=readout_name, errorbar=None, color=color, legend=False)
+                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=target,
+                                 label=readout_name, errorbar=None, color=color, legend=False)
 
                     if j != 0:  # Only the first row gets a base y-axis label
                         ax.set_ylabel('')
@@ -241,7 +242,7 @@ class FlowEngine:
                     # Only the last column gets a twinned y-axis label
                     if j != len(col_values) - 1 and twinax:
                         hax.set_ylabel('')
-                        
+
                     if j == 0:
                         if twinax:
                             handles1, labels1 = ax.get_legend_handles_labels()
@@ -257,8 +258,8 @@ class FlowEngine:
                         else:
                             ax.legend()
                     else:
-                        tax.legend([],[], frameon=False)
-                        ax.legend([],[], frameon=False)
+                        tax.legend([], [], frameon=False)
+                        ax.legend([], [], frameon=False)
 
         # After all plotting operations, synchronize y-limits across all twinned axes
         if twinax:
@@ -266,7 +267,6 @@ class FlowEngine:
         plt.tight_layout()
 
         return fig
-
 
     def get_raw_events_for_sample(self, sample_id, channel_name, gate_name, transform=False):
         sample = self.wsp.get_sample(sample_id)
@@ -301,20 +301,22 @@ class FlowEngine:
         col_values = self.df[cols_field].unique()
         row_values = self.df[rows_field].unique()
 
-        fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(3.4*len(col_values), 3.5*len(row_values)), sharey=True)
+        fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(
+            3.4*len(col_values), 3.5*len(row_values)), sharey=True)
         fig.suptitle('Raw Data Histograms', fontsize=30)
 
         for j, col_name in enumerate(col_values):
             for i, row_name in enumerate(row_values):
                 ax = axs[i, j]
                 ax.set_title('%s \n %s' % (col_name, row_name))
-                
-                target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] == row_name) & (self.df['well wells'].str.contains(wells))]
+
+                target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] ==
+                                                                      row_name) & (self.df['well wells'].str.contains(wells))]
                 sample_ids = target['data_address'].unique()  # Assuming each target dataframe has unique sample_ids
                 timepoints = target['well timepoint'].unique()
                 for k, sample_id in enumerate(sample_ids):
                     raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
-                    
+
                     color = default_colors[j % len(default_colors)]
                     # sns.histplot(raw_data, ax=ax, color=color, label=row_name)
                     sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True)
@@ -324,62 +326,60 @@ class FlowEngine:
                 if i == 0 and j == 0:
                     ax.legend()
                 else:
-                    ax.legend([],[], frameon=False)
+                    ax.legend([], [], frameon=False)
 
         plt.tight_layout()
         return fig
-    
+
     @staticmethod
     def normalize_data(df):
 
         def compute_normalization_factors(df):
             # Filter for timepoint zero
             timepoint_zero = df[df['well timepoint'] == 0]
-            
+
             # Compute mean for each combination of `condition effectors` and `condition condition`
             mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean().reset_index()
 
             return mean_values
-        
 
         mean_values = compute_normalization_factors(df)
         gate_counts_columns = [col for col in df.columns if 'gate_counts' in col]
-        
+
         # Create a copy of df to store normalized values
         normalized_df = df.copy()
 
         for col in gate_counts_columns:
             new_col_name = f"normalized_{col}"
-            
-            normalized_df = pd.merge(normalized_df, 
-                                    mean_values[['condition effectors', 'condition condition', col]], 
-                                    on=['condition effectors', 'condition condition'], 
-                                    how='left', 
-                                    suffixes=('', '_mean'))
-            
+
+            normalized_df = pd.merge(normalized_df,
+                                     mean_values[['condition effectors', 'condition condition', col]],
+                                     on=['condition effectors', 'condition condition'],
+                                     how='left',
+                                     suffixes=('', '_mean'))
+
             normalized_df[new_col_name] = normalized_df[col] / normalized_df[f"{col}_mean"]
             normalized_df.drop(f"{col}_mean", axis=1, inplace=True)
-        
+
         return normalized_df
-    
+
     def normalize_counts(self):
         """
         Normalize the counts by the counts at timepoint zero.
         """
         self.df = self.normalize_data(self.df)
 
-
     def visualize_t0_counts(self, counts_col, df=None):
         """
         Visualize the specified column from the dataframe with thresholds for outlier detection.
-        
+
         Parameters
         ----------
         df : DataFrame
             The dataframe containing the data to be visualized.
         counts_col : str
             The column name of the data to be plotted on the y-axis.
-        
+
         Returns
         -------
         fig : Figure
@@ -391,7 +391,7 @@ class FlowEngine:
             df = self.df[self.df['well timepoint'] == 0]
 
         # Create a figure and axis object
-        fig, ax = plt.subplots(figsize=(10,3), dpi=300)
+        fig, ax = plt.subplots(figsize=(10, 3), dpi=300)
 
         # Generate the x-values
         x_values = range(len(df))
@@ -416,8 +416,10 @@ class FlowEngine:
         ax.axhline(y=upper_threshold, color='grey', linestyle='--', label='Upper Threshold', alpha=0.5)
 
         # Add text labels for the thresholds
-        ax.text(x_values[-1] + 0.5, lower_threshold, 'Lower Threshold (Q1 - 1.5 * IQR)', verticalalignment='bottom', horizontalalignment='right', color='grey')
-        ax.text(x_values[-1] + 0.5, upper_threshold, 'Upper Threshold (Q3 + 1.5 * IQR)', verticalalignment='bottom', horizontalalignment='right', color='grey')
+        ax.text(x_values[-1] + 0.5, lower_threshold, 'Lower Threshold (Q1 - 1.5 * IQR)',
+                verticalalignment='bottom', horizontalalignment='right', color='grey')
+        ax.text(x_values[-1] + 0.5, upper_threshold, 'Upper Threshold (Q3 + 1.5 * IQR)',
+                verticalalignment='bottom', horizontalalignment='right', color='grey')
 
         for idx, x_val in enumerate(x_values):
             current_value = df.iloc[idx][counts_col]
@@ -425,13 +427,12 @@ class FlowEngine:
                 ax.text(x_val, current_value, f"{df.iloc[idx]['well plate']} {df.iloc[idx]['well wells']}")
 
         plt.tight_layout()
-        
+
         return fig
 
     # Sample usage (assuming you have a DataFrame `sample_df`):
     # fig = visualize_t0_plate(sample_df, "some_column_name")
     # fig.savefig("output.png")
-
 
     def plot_timecourses_by_condition(self, effectors_list, df=None):
         """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
@@ -445,7 +446,7 @@ class FlowEngine:
         """
         if df is None:
             df = self.df
-        
+
         df = df[df['condition effectors'].isin(effectors_list)]
 
         # concatenate all the species_lists and then get the unique values
@@ -465,7 +466,7 @@ class FlowEngine:
                 for j, effector_condition in enumerate(tdf['condition effectors'].unique()):
                     sdf = tdf[tdf['condition effectors'] == effector_condition]
                     sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
-                                data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
+                                 data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
 
                     axs[i].set_title('%s | %s' % (condition, species))
                     axs[i].set_xlabel('Time (hours)')
@@ -482,7 +483,7 @@ class FlowEngine:
             figs.append(fig)
 
         return figs
-    
+
     def plot_timecourses_by_effectors(self, effectors_list, df=None):
         """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
 
@@ -495,7 +496,7 @@ class FlowEngine:
         """
         if df is None:
             df = self.df
-        
+
         df = df[df['condition effectors'].isin(effectors_list)]
 
         # concatenate all the species_lists and then get the unique values
@@ -507,18 +508,18 @@ class FlowEngine:
         for effector_condition in effectors_list:
             fig, axs = plt.subplots(1, len(total_species_list), figsize=(len(total_species_list)*4 + 2, 4), dpi=300)
             fig.suptitle(effector_condition)
-            
+
             # Filter by effector condition
             edf = df[df['condition effectors'] == effector_condition]
-            
+
             for i, species in enumerate(total_species_list):
-                
+
                 for j, condition in enumerate(edf['condition condition'].unique()):
                     cdf = edf[edf['condition condition'] == condition]
                     if species not in cdf['condition species_list'].iloc[0]:
                         continue
                     sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
-                                data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o')
+                                 data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o')
                     axs[i].set_title(species)
                     axs[i].set_xlabel('Time (hours)')
                     axs[i].set_ylabel('Normalized Counts')
@@ -526,7 +527,7 @@ class FlowEngine:
                     # Remove legend for all but the last subplot
                     if i < len(total_species_list) - 1:
                         axs[i].legend().set_visible(False)
-            
+
             # Add legend to the right of the last subplot
             axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
             plt.tight_layout()
