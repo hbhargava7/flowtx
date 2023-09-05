@@ -1,10 +1,21 @@
 numpy
 scipy
 pandas
+seaborn==0.12.2
 matplotlib
 ipykernel
 bokeh
 # flowkit @ file:///Users/hbhargava/Drive/Projects/Code/FlowKit
 # Until flowkit update is merged
-flowkit @ git+https://github.com/hbhargava7/flowkit@hkb-add-autoread-fcs-from-flowjo
+# flowkit @ git+https://github.com/hbhargava7/flowkit@hkb-add-autoread-fcs-from-flowjo
 pytest
+
+# Manually add deps for flowkit because of sns clash
+anytree>=2.6
+bokeh>=2.4,<3.0
+flowio==1.1.1
+flowutils>=1,<1.1
+lxml>=4.7
+networkx>=2.3
+psutil>=5.8
+scipy>=1.6

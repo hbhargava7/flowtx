@@ -339,7 +339,7 @@ class FlowEngine:
             timepoint_zero = df[df['well timepoint'] == 0]
 
             # Compute mean for each combination of `condition effectors` and `condition condition`
-            mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean().reset_index()
+            mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean(numeric_only=True).reset_index()
 
             return mean_values
 
@@ -361,6 +361,7 @@ class FlowEngine:
             normalized_df[new_col_name] = normalized_df[col] / normalized_df[f"{col}_mean"]
             normalized_df.drop(f"{col}_mean", axis=1, inplace=True)
 
+        normalized_df = normalized_df.replace([np.inf, -np.inf], np.nan)
         return normalized_df
 
     def normalize_counts(self):
