@@ -435,7 +435,7 @@ class FlowEngine:
     # fig = visualize_t0_plate(sample_df, "some_column_name")
     # fig.savefig("output.png")
 
-    def plot_timecourses_by_condition(self, effectors_list, df=None):
+    def plot_timecourses_by_condition(self, effectors_list, df=None, title=None):
         """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
 
         Parameters
@@ -444,7 +444,10 @@ class FlowEngine:
             _description_
         effectors_list : list[str]
             _description_
+        title : str, optional
+            String title for plots
         """
+        
         if df is None:
             df = self.df
 
@@ -457,7 +460,12 @@ class FlowEngine:
         # Plot each condition with each species as a subplot
         for condition in df['condition condition'].unique():
             fig, axs = plt.subplots(1, len(total_species_list), figsize=(len(total_species_list)*4 + 2, 4), dpi=300)
-            fig.suptitle(condition)
+
+            if title:
+                fig.suptitle('%s\nCondition: %s' % (title, condition), fontsize=25, fontweight='bold')
+
+            else:
+                fig.suptitle(condition, fontsize=25, fontweight='bold')
 
             tdf = df[df['condition condition'] == condition]
 
@@ -485,7 +493,7 @@ class FlowEngine:
 
         return figs
 
-    def plot_timecourses_by_effectors(self, effectors_list, df=None):
+    def plot_timecourses_by_effectors(self, effectors_list, df=None, title=None):
         """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
 
         Parameters
@@ -494,7 +502,10 @@ class FlowEngine:
             _description_
         effectors_list : list[str]
             _description_
+        title : str, optional
+            String title for plots
         """
+        
         if df is None:
             df = self.df
 
@@ -508,7 +519,10 @@ class FlowEngine:
         # Plot for each effector condition with each species as a subplot
         for effector_condition in effectors_list:
             fig, axs = plt.subplots(1, len(total_species_list), figsize=(len(total_species_list)*4 + 2, 4), dpi=300)
-            fig.suptitle(effector_condition)
+            if title:
+                fig.suptitle('%s\nCondition: %s' % (title, effector_condition), fontsize=25, fontweight='bold')
+            else:
+                fig.suptitle(effector_condition, fontsize=25, fontweight='bold')
 
             # Filter by effector condition
             edf = df[df['condition effectors'] == effector_condition]
