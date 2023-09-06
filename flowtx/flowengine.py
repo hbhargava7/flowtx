@@ -145,7 +145,7 @@ class FlowEngine:
 
             return gate_counts
         else:
-            print('Sample not found in workspace.')
+            print('Sample not found in workspace: %s' % data_address)
             return None
 
     def plot_timecourses(self, rows_field, cols_field, fields_to_plot, time_col, gate_cols_prefix=None, df=None, twinax=True):
@@ -232,8 +232,12 @@ class FlowEngine:
                     else:
                         tax = ax
 
-                    sns.scatterplot(ax=tax, x=time_col, y=readout_name, data=target, color=color, legend=False)
-                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=target,
+                    # Drop nan values
+                    _target = target.dropna(subset=[time_col, readout_name])
+
+
+                    sns.scatterplot(ax=tax, x=time_col, y=readout_name, data=_target, color=color, legend=False)
+                    sns.lineplot(ax=tax, x=time_col, y=readout_name, data=_target,
                                  label=readout_name, errorbar=None, color=color, legend=False)
 
                     if j != 0:  # Only the first row gets a base y-axis label
@@ -315,11 +319,14 @@ class FlowEngine:
                 sample_ids = target['data_address'].unique()  # Assuming each target dataframe has unique sample_ids
                 timepoints = target['well timepoint'].unique()
                 for k, sample_id in enumerate(sample_ids):
-                    raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+                    try:
+                        raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
 
-                    color = default_colors[j % len(default_colors)]
-                    # sns.histplot(raw_data, ax=ax, color=color, label=row_name)
-                    sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True)
+                        color = default_colors[j % len(default_colors)]
+                        # sns.histplot(raw_data, ax=ax, color=color, label=row_name)
+                        sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True)
+                    except Exception as e:
+                        print('Failed to plot %s: %s' % (sample_id, e))
 
                 if j != 0:  # Only the first row gets a base y-axis label
                     ax.set_ylabel('')
@@ -336,7 +343,7 @@ class FlowEngine:
 
         def compute_normalization_factors(df):
             # Filter for timepoint zero
-            timepoint_zero = df[df['well timepoint'] == 0]
+            timepoint_zero = df[df['well timepoint'] == np.min(df['well timepoint'])]
 
             # Compute mean for each combination of `condition effectors` and `condition condition`
             mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean(numeric_only=True).reset_index()
@@ -370,7 +377,7 @@ class FlowEngine:
         """
         self.df = self.normalize_data(self.df)
 
-    def visualize_t0_counts(self, counts_col, df=None):
+    def visualize_raw_counts(self, counts_col, timepoint=None, df=None):
         """
         Visualize the specified column from the dataframe with thresholds for outlier detection.
 
@@ -380,6 +387,8 @@ class FlowEngine:
             The dataframe containing the data to be visualized.
         counts_col : str
             The column name of the data to be plotted on the y-axis.
+        timepoint : int
+            The timepoint to be visualized. if `df` not provided we will filter for df['well timepoint'] == timepoint
 
         Returns
         -------
@@ -389,14 +398,18 @@ class FlowEngine:
         """
 
         if df is None:
-            df = self.df[self.df['well timepoint'] == 0]
+            df = self.df[self.df['well timepoint'] == timepoint]
 
         # Create a figure and axis object
         fig, ax = plt.subplots(figsize=(10, 3), dpi=300)
 
         # Generate the x-values
         x_values = range(len(df))
-
+        if timepoint is not None:
+            fig.suptitle('Raw Counts (t=%s)' % timepoint, fontsize=24)
+        else:
+            fig.suptitle('Raw Counts', fontsize=24)
+                         
         # Scatter plot with Seaborn
         sns.scatterplot(x=x_values, y=df[counts_col], hue=df['condition effectors'], ax=ax)
 
@@ -470,21 +483,27 @@ class FlowEngine:
             tdf = df[df['condition condition'] == condition]
 
             for i, species in enumerate(total_species_list):
-                if species not in tdf['condition species_list'].iloc[0]:
-                    continue
-                for j, effector_condition in enumerate(tdf['condition effectors'].unique()):
-                    sdf = tdf[tdf['condition effectors'] == effector_condition]
-                    sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
-                                 data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
+                try:
+                    if species not in tdf['condition species_list'].iloc[0]:
+                        continue
+                    for j, effector_condition in enumerate(tdf['condition effectors'].unique()):
+                        sdf = tdf[tdf['condition effectors'] == effector_condition]
 
-                    axs[i].set_title('%s | %s' % (condition, species))
-                    axs[i].set_xlabel('Time (hours)')
-                    axs[i].set_ylabel('Normalized Counts')
+                        # Drop any nan values before plotting
+                        sdf = sdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
 
-                    # Remove legend for all but the last subplot
-                    if i < len(total_species_list) - 1:
-                        axs[i].legend().set_visible(False)
+                        sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
+                                    data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
 
+                        axs[i].set_title('%s | %s' % (condition, species))
+                        axs[i].set_xlabel('Time (hours)')
+                        axs[i].set_ylabel('Normalized Counts')
+
+                        # Remove legend for all but the last subplot
+                        if i < len(total_species_list) - 1:
+                            axs[i].legend().set_visible(False)
+                except Exception as e:
+                    print('Error plotting %s: %s' % (species, e))
             # Add legend to the right of the last subplot
             axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
@@ -531,8 +550,13 @@ class FlowEngine:
 
                 for j, condition in enumerate(edf['condition condition'].unique()):
                     cdf = edf[edf['condition condition'] == condition]
+                    # Drop nans
+
                     if species not in cdf['condition species_list'].iloc[0]:
                         continue
+                        
+                    cdf = cdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
+
                     sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
                                  data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o')
                     axs[i].set_title(species)
