@@ -576,7 +576,7 @@ class FlowEngine:
                         sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
                                     data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
 
-                        axs[i].set_title('%s | %s' % (condition, species))
+                        axs[i].set_title('%s \n %s' % (condition, species))
                         axs[i].set_xlabel('Time (hours)')
                         axs[i].set_ylabel('Normalized Counts')
 
