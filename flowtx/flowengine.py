@@ -285,19 +285,44 @@ class FlowEngine:
         gate_results = self.wsp.get_gating_results(sample_id=sample_id)
         is_gate_event = gate_results.get_gate_membership(gate_name)
 
-        is_subsample = np.zeros(sample.event_count, dtype=bool)
-        is_subsample[sample.subsample_indices] = True
+        # is_subsample = np.zeros(sample.event_count, dtype=bool)
+        # is_subsample[sample.subsample_indices] = True
 
-        idx_to_plot = np.logical_and(is_gate_event, is_subsample)
+        # idx_to_plot = np.logical_and(is_gate_event, is_subsample)
 
-        x = x[idx_to_plot]
+        x = x[is_gate_event]
 
         return x
 
-    def plot_histograms(self, rows_field, cols_field, channel_name, gate_name, transform=False, wells='A|D'):
+    def plot_histograms(self, rows_field, cols_field, channel_name, gate_name, transform=False, wells='A|D', norm=False, kde_bw=0.1):
         """
         Plot histograms for each condition using raw events.
+
+        Parameters
+        ----------
+        rows_field : str
+
+        cols_field : str
+
+        channel_name : str
+
+        gate_name : str
+
+        transform : bool, optional
+
+        wells : str, optional
+
+        norm : bool, optional
+            Whether to normalize the histograms.
+
+            if False, will scale by the number of cells.
+
+        Returns
+        -------
+        fig : Figure
+            A matplotlib Figure object containing the generated plot.
         """
+        from scipy.stats import gaussian_kde
 
         default_colors = mpl.rcParams['axes.prop_cycle'].by_key()['color']
         default_colors = ['black', 'blue', 'red']
@@ -306,7 +331,7 @@ class FlowEngine:
         row_values = self.df[rows_field].unique()
 
         fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(
-            3.4*len(col_values), 3.5*len(row_values)), sharey=True)
+            3.4*len(col_values), 3.5*len(row_values)), sharey=True, sharex=True)
         fig.suptitle('Raw Data Histograms', fontsize=30)
 
         for j, col_name in enumerate(col_values):
@@ -318,15 +343,48 @@ class FlowEngine:
                                                                       row_name) & (self.df['well wells'].str.contains(wells))]
                 sample_ids = target['data_address'].unique()  # Assuming each target dataframe has unique sample_ids
                 timepoints = target['well timepoint'].unique()
-                for k, sample_id in enumerate(sample_ids):
-                    try:
-                        raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
 
-                        color = default_colors[j % len(default_colors)]
-                        # sns.histplot(raw_data, ax=ax, color=color, label=row_name)
-                        sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True)
-                    except Exception as e:
-                        print('Failed to plot %s: %s' % (sample_id, e))
+                data = []
+                if norm == False:
+                    # Aggregate all the data
+                    for k, sample_id in enumerate(sample_ids):
+                            
+                            # Get the raw data for the sample
+                            raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+
+                            # Drop negative, inf, or nan values
+                            raw_data = raw_data[np.isfinite(raw_data)]  # Removes inf and nan
+                            raw_data = raw_data[raw_data > 0]  # Removes negative values
+
+                            # Log transform the data
+                            raw_data = np.log10(raw_data)
+                            data.append(raw_data)
+
+                    for l, _data in enumerate(data):
+
+                        # plot KDE
+                        kde = gaussian_kde(_data, bw_method=kde_bw)
+
+                        # Get the bounds of the data
+                        x_grid = np.linspace(min(np.hstack(data)), max(np.hstack(data)), 1000)
+                        density = kde.evaluate(x_grid) * len(_data)
+                        
+                        # Plot the KDE
+                        ax.plot(10**x_grid, density, label=timepoints[l])
+                        ax.fill_between(10**x_grid, density, 0, alpha=.25)
+
+                    ax.set_xscale('log')
+
+                else:
+                   
+                    for k, sample_id in enumerate(sample_ids):
+                        try:
+                            raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+
+                            sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=timepoints[k], fill=True, common_norm=norm)
+
+                        except Exception as e:
+                            print('Failed to plot %s: %s' % (sample_id, e))
 
                 if j != 0:  # Only the first row gets a base y-axis label
                     ax.set_ylabel('')
@@ -447,6 +505,29 @@ class FlowEngine:
     # Sample usage (assuming you have a DataFrame `sample_df`):
     # fig = visualize_t0_plate(sample_df, "some_column_name")
     # fig.savefig("output.png")
+
+    def get_total_species_list(self, df=None):
+        """
+        Get the total list of species across all conditions.
+
+        Parameters
+        ----------
+        df : DataFrame
+            The dataframe containing the data to be visualized.
+
+        Returns
+        -------
+        species_list : list
+            A list of all the species across all conditions.
+
+        """
+        if df is None:
+            df = self.df
+
+        # concatenate all the species_lists and then get the unique values
+        species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+
+        return species_list
 
     def plot_timecourses_by_condition(self, effectors_list, df=None, title=None):
         """Figure for each `condition condition`, trace for each `condition effectors` in `effectors_list
