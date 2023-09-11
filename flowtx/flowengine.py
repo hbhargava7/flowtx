@@ -550,6 +550,11 @@ class FlowEngine:
         # concatenate all the species_lists and then get the unique values
         total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
 
+        # Retrieve the color cycle from the current matplotlib style
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        unique_effectors = df['condition effectors'].unique()
+        color_dict = {effector: color_cycle[i % len(color_cycle)] for i, effector in enumerate(unique_effectors)}
+
         figs = []
         # Plot each condition with each species as a subplot
         for condition in df['condition condition'].unique():
@@ -574,7 +579,9 @@ class FlowEngine:
                         sdf = sdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
 
                         sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
-                                    data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o')
+                                    data=sdf, ax=axs[i], label=effector_condition, errorbar='se', err_style='band', marker='o',
+                                    color=color_dict[effector_condition])  # Use the specific color for the current effector_condition
+
 
                         axs[i].set_title('%s \n %s' % (condition, species))
                         axs[i].set_xlabel('Time (hours)')
@@ -614,6 +621,11 @@ class FlowEngine:
         # concatenate all the species_lists and then get the unique values
         total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
 
+        # Retrieve the color cycle from the current matplotlib style
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        unique_conditions = df['condition condition'].unique()
+        color_dict = {condition: color_cycle[i % len(color_cycle)] for i, condition in enumerate(unique_conditions)}
+
         figs = []
         # Plot each condition with each species as a subplot
         # Plot for each effector condition with each species as a subplot
@@ -628,18 +640,17 @@ class FlowEngine:
             edf = df[df['condition effectors'] == effector_condition]
 
             for i, species in enumerate(total_species_list):
-
-                for j, condition in enumerate(edf['condition condition'].unique()):
+                for j, condition in enumerate(unique_conditions):
                     cdf = edf[edf['condition condition'] == condition]
-                    # Drop nans
-
                     if species not in cdf['condition species_list'].iloc[0]:
                         continue
-                        
+
                     cdf = cdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
 
                     sns.lineplot(x='well timepoint', y='normalized_gate_counts count %s' % species,
-                                 data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o')
+                         data=cdf, ax=axs[i], label=condition, errorbar='se', err_style='band', marker='o',
+                         color=color_dict[condition])  # Use the specific color for the current condition
+
                     axs[i].set_title(species)
                     axs[i].set_xlabel('Time (hours)')
                     axs[i].set_ylabel('Normalized Counts')
