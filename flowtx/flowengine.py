@@ -294,6 +294,86 @@ class FlowEngine:
 
         return x
 
+    def plot_histograms_for_samples(self, sample_ids, channel_name, gate_name, transform=None, kde_bw=0.1, norm=False, labels=None):
+        """Plot histograms for one or more `sample_ids`.
+
+        Parameters
+        ----------
+        sample_ids : list[str]
+            List of sample ids (passed to `self.get_raw_events_for_sample`)
+        channel_name : str
+            Fluorescence channel
+        gate_name : str
+            Gate name
+        transform : callable, optional
+            transforming function, optional (see flowkit transforms)
+        kde_bw : float, optional
+            bandwidth for KDE smoothing, by default 0.1
+        norm : bool
+            Normalize the scale of the histograms
+        labels : list[str], optional
+            Labels in the same order as `sample_ids` for the traces. Otherwise will label with `sample_ids.
+
+        """
+
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=150)
+
+        from scipy.stats import gaussian_kde
+
+        if labels is None:
+            labels = sample_ids
+
+        data = []
+        if norm == False:
+            # Aggregate all the data
+            for k, sample_id in enumerate(sample_ids):
+                    
+                    # Get the raw data for the sample
+                    raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+
+                    # Drop negative, inf, or nan values
+                    raw_data = raw_data[np.isfinite(raw_data)]  # Removes inf and nan
+                    raw_data = raw_data[raw_data > 0]  # Removes negative values
+
+                    # Log transform the data                 
+                    raw_data = np.log10(raw_data)
+                    data.append(raw_data)
+
+            for l, _data in enumerate(data):
+
+                # plot KDE
+                kde = gaussian_kde(_data, bw_method=kde_bw)
+
+                # Get the bounds of the data
+                x_grid = np.linspace(min(np.hstack(data)), max(np.hstack(data)*1.2), 1000)
+                density = kde.evaluate(x_grid) * len(_data)
+                    
+                # Plot the KDE
+                ax.plot(10**x_grid, density, label=labels[l])
+                ax.fill_between(10**x_grid, density, 0, alpha=.25)
+
+            ax.set_xscale('log')
+
+        else:
+            
+            for k, sample_id in enumerate(sample_ids):
+                try:
+                    raw_data = self.get_raw_events_for_sample(sample_id, channel_name, gate_name, transform)
+                    raw_data = raw_data[np.isfinite(raw_data)]  # Removes inf and nan
+                    raw_data = raw_data[raw_data > 0]  # Removes negative values
+                    sns.kdeplot(raw_data, ax=ax, log_scale=True, bw_adjust=0.5, label=labels[k], fill=True, common_norm=norm)
+
+                except Exception as e:
+                    print('Failed to plot %s: %s' % (sample_id, e))
+
+        ax.set_xlabel(channel_name)
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+        plt.tight_layout()
+
+        return fig
+
+
     def plot_histograms(self, rows_field, cols_field, channel_name, gate_name, transform=False, wells='A|D', norm=False, kde_bw=0.1):
         """
         Plot histograms for each condition using raw events.
@@ -361,17 +441,19 @@ class FlowEngine:
                             data.append(raw_data)
 
                     for l, _data in enumerate(data):
+                        try:
+                            # plot KDE
+                            kde = gaussian_kde(_data, bw_method=kde_bw)
 
-                        # plot KDE
-                        kde = gaussian_kde(_data, bw_method=kde_bw)
-
-                        # Get the bounds of the data
-                        x_grid = np.linspace(min(np.hstack(data)), max(np.hstack(data)), 1000)
-                        density = kde.evaluate(x_grid) * len(_data)
-                        
-                        # Plot the KDE
-                        ax.plot(10**x_grid, density, label=timepoints[l])
-                        ax.fill_between(10**x_grid, density, 0, alpha=.25)
+                            # Get the bounds of the data
+                            x_grid = np.linspace(min(np.hstack(data)), max(np.hstack(data)), 1000)
+                            density = kde.evaluate(x_grid) * len(_data)
+                            
+                            # Plot the KDE
+                            ax.plot(10**x_grid, density, label=timepoints[l])
+                            ax.fill_between(10**x_grid, density, 0, alpha=.25)
+                        except Exception as e:
+                            print('Failed to plot %s: %s' % (sample_id, e))
 
                     ax.set_xscale('log')
 
@@ -592,8 +674,20 @@ class FlowEngine:
                             axs[i].legend().set_visible(False)
                 except Exception as e:
                     print('Error plotting %s: %s' % (species, e))
+
+
+            # After plotting all lines in the rightmost subplot, retrieve the lines and labels
+            lines, labels = axs[-1].get_legend_handles_labels()
+
+            # Sort the lines and labels based on the y-data of the lines
+            sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
+
+            # Set the legend with the sorted labels
+            axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
+
+
             # Add legend to the right of the last subplot
-            axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
+            # axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
             plt.tight_layout()
             figs.append(fig)
@@ -658,9 +752,15 @@ class FlowEngine:
                     # Remove legend for all but the last subplot
                     if i < len(total_species_list) - 1:
                         axs[i].legend().set_visible(False)
+            # After plotting all lines in the rightmost subplot, retrieve the lines and labels
+            lines, labels = axs[-1].get_legend_handles_labels()
 
-            # Add legend to the right of the last subplot
-            axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
+            # Sort the lines and labels based on the y-data of the lines
+            sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
+
+            # Set the legend with the sorted labels
+            axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
+
             plt.tight_layout()
 
             figs.append(fig)
