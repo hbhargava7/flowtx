@@ -205,16 +205,20 @@ class FlowEngine:
                 target = df[(df[cols_field] == col_name) & (df[rows_field] == row_name)]
 
                 if isinstance(fields_to_plot, str):
-                    gates = target[fields_to_plot].iloc[0]
+                    try:
+                        gates = target[fields_to_plot].iloc[0]
 
-                    gate_cols = []
-                    for gate in gates:
-                        if gate_cols_prefix:
-                            gate_cols.append('%sgate_counts count %s' % (gate_cols_prefix, gate))
-                        else:
-                            gate_cols.append('gate_counts count %s' % gate)
+                        gate_cols = []
+                        for gate in gates:
+                            if gate_cols_prefix:
+                                gate_cols.append('%sgate_counts count %s' % (gate_cols_prefix, gate))
+                            else:
+                                gate_cols.append('gate_counts count %s' % gate)
 
-                    _fields_to_plot = gate_cols
+                        _fields_to_plot = gate_cols
+                    except Exception as e:
+                        print('Error plotting %s | %s' % (row_name, col_name))
+                        continue
                     # print(fields_to_plot)
 
                 else:
@@ -578,7 +582,9 @@ class FlowEngine:
         for idx, x_val in enumerate(x_values):
             current_value = df.iloc[idx][counts_col]
             if current_value < lower_threshold or current_value > upper_threshold:
-                ax.text(x_val, current_value, f"{df.iloc[idx]['well plate']} {df.iloc[idx]['well wells']}")
+                outlier_label =f"{df.iloc[idx]['well plate']} {df.iloc[idx]['well wells']}" 
+                ax.text(x_val, current_value, outlier_label)
+                print("Outlier for %s: %s" % (counts_col, outlier_label))
 
         plt.tight_layout()
 
@@ -736,7 +742,7 @@ class FlowEngine:
             for i, species in enumerate(total_species_list):
                 for j, condition in enumerate(unique_conditions):
                     cdf = edf[edf['condition condition'] == condition]
-                    if species not in cdf['condition species_list'].iloc[0]:
+                    if len(cdf['condition species_list']) == 0:
                         continue
 
                     cdf = cdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
