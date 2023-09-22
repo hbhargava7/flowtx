@@ -521,7 +521,7 @@ class FlowEngine:
         """
         self.df = self.normalize_data(self.df)
 
-    def visualize_raw_counts(self, counts_col, timepoint=None, df=None):
+    def visualize_raw_counts(self, counts_col, timepoint=None, df=None, iqr_fold=1.5):
         """
         Visualize the specified column from the dataframe with thresholds for outlier detection.
 
@@ -566,8 +566,8 @@ class FlowEngine:
         Q1 = df[counts_col].quantile(0.25)
         Q3 = df[counts_col].quantile(0.75)
         IQR = Q3 - Q1
-        lower_threshold = Q1 - 1.5 * IQR
-        upper_threshold = Q3 + 1.5 * IQR
+        lower_threshold = Q1 - iqr_fold * IQR
+        upper_threshold = Q3 + iqr_fold * IQR
 
         # Draw lines for quantiles and thresholds
         ax.axhline(y=lower_threshold, color='grey', linestyle='--', label='Lower Threshold', alpha=0.5)
@@ -743,6 +743,9 @@ class FlowEngine:
                 for j, condition in enumerate(unique_conditions):
                     cdf = edf[edf['condition condition'] == condition]
                     if len(cdf['condition species_list']) == 0:
+                        continue
+
+                    if species not in cdf['condition species_list'].iloc[0]:
                         continue
 
                     cdf = cdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
