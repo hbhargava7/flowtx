@@ -683,14 +683,17 @@ class FlowEngine:
 
 
             # After plotting all lines in the rightmost subplot, retrieve the lines and labels
-            lines, labels = axs[-1].get_legend_handles_labels()
+            lines, labels = axs[0].get_legend_handles_labels()
 
-            # Sort the lines and labels based on the y-data of the lines
-            sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
+            try:
+                # Sort the lines and labels based on the y-data of the lines
+                sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
 
-            # Set the legend with the sorted labels
-            axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
-
+                # Set the legend with the sorted labels
+                axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
+            except Exception as e:
+                print('Error sorting labels: %s' % e)
+                axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
             # Add legend to the right of the last subplot
             # axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
@@ -762,13 +765,17 @@ class FlowEngine:
                     if i < len(total_species_list) - 1:
                         axs[i].legend().set_visible(False)
             # After plotting all lines in the rightmost subplot, retrieve the lines and labels
-            lines, labels = axs[-1].get_legend_handles_labels()
+            lines, labels = axs[0].get_legend_handles_labels()
 
-            # Sort the lines and labels based on the y-data of the lines
-            sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
+            try:
+                # Sort the lines and labels based on the y-data of the lines
+                sorted_labels, sorted_lines = zip(*sorted(zip(labels, lines), key=lambda t: t[1].get_ydata()[-1], reverse=True))
 
-            # Set the legend with the sorted labels
-            axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
+                # Set the legend with the sorted labels
+                axs[-1].legend(sorted_lines, sorted_labels, loc='upper left', bbox_to_anchor=(1, 1))
+            except Exception as e:
+                print('Error sorting labels: %s' % e)
+                axs[-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
             plt.tight_layout()
 
