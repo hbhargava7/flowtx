@@ -59,6 +59,43 @@ class FlowEngine:
 
         self.rebuild_df()
 
+
+    @classmethod
+    def load_engine_from_file(cls, path: str):
+        """Instantiates a FlowEngine object from a serialized record.
+        
+        Parameters
+        ----------
+        path : str
+            The path from where the serialized FlowEngine object should be loaded.
+        
+        Returns
+        -------
+        FlowEngine
+            An instance of FlowEngine loaded from the serialized record.
+        """
+        
+        with open(path, 'rb') as file:
+            instance = pickle.load(file)
+        
+        if not isinstance(instance, cls):
+            raise TypeError(f"Unserialized object is of type {type(instance)}, expected {cls}.")
+        
+        return instance
+
+    def save_to_file(self, path: str):
+        """Serializes the FlowEngine object and saves it to a specified path.
+        
+        Parameters
+        ----------
+        path : str
+            The path where the serialized FlowEngine object should be saved.
+        """
+        
+        with open(path, 'wb') as file:
+            pickle.dump(self, file)
+
+
     def rebuild_df(self):
         """
         Rebuild the dataframe from the samples.
@@ -175,7 +212,7 @@ class FlowEngine:
         row_values = df[rows_field].unique()
 
         fig, axs = plt.subplots(len(row_values), len(col_values), figsize=(
-            3.4*len(col_values), 3.5*len(row_values)), sharey=True)
+            3.4*len(col_values), 3.5*len(row_values)), sharey=True, sharex=True)
         fig.suptitle('Raw Data', fontsize=30)
 
         haxs = []
