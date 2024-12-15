@@ -652,7 +652,7 @@ class FlowEngine:
             df = self.df[self.df['well timepoint'] == timepoint]
 
         # Create a figure and axis object
-        fig, ax = plt.subplots(figsize=(10, 3), dpi=300)
+        fig, ax = plt.subplots(figsize=(10, 3), dpi=150)
 
         # Generate the x-values
         x_values = range(len(df))
@@ -1173,7 +1173,7 @@ class FlowEngine:
 
         return figs
 
-    def plot_2d_species_scatter_for_timepoint(self, timepoint, x_species, y_species, normalized=False, color_palette='deep', 
+    def plot_2d_species_scatter_for_timepoint(self, timepoint, x_species, y_species, df=None, normalized=False, color_palette='deep', 
                                               color_by='condition effectors', override_uniform_color=None, color_labels=True,
                                               plot_title=None):
         """
@@ -1181,6 +1181,9 @@ class FlowEngine:
 
         Parameters
         ----------
+        df : pd.DataFrame
+            Override the starting data frame to work from.
+
         timepoint : int
             The timepoint to visualize.
         
@@ -1213,9 +1216,12 @@ class FlowEngine:
         from adjustText import adjust_text
 
 
+        if df is None:
+            df = self.df
+
+        fx_df = df
 
         # Filter the DataFrame for the specified conditions
-        fx_df = self.df
         fx_df = fx_df[fx_df['well timepoint'] == timepoint]
 
         # Calculate the mean and standard deviation for each condition effectors group
@@ -1226,6 +1232,14 @@ class FlowEngine:
             x_gate_col = 'gate_counts count %s' % x_species
             y_gate_col = 'gate_counts count %s' % y_species
 
+        # Count the number of rows in each group and add a warning if needed
+        group_counts = fx_df.groupby('condition effectors').size().reset_index(name='row_count')
+        warning_groups = group_counts[group_counts['row_count'] > 3]
+
+        if not warning_groups.empty:
+            warn("Warning: The following groups hAave more than 3 rows. Unless you had more than 3 technical replicates, this likely means that multiple conditions (e.g. `condition condition`s) are being plotted over one another. Ensure this is the desired behavior.")
+            print(warning_groups)
+            
         summary_df = fx_df.groupby('condition effectors').agg(
             mean_x=(x_gate_col, 'mean'),
             std_x=(x_gate_col, 'std'),
@@ -1281,8 +1295,5 @@ class FlowEngine:
         # plt.legend(title='Condition Effectors', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
 
-        return fig
-
-
-
+        return fig, summary_df
 
