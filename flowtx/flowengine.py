@@ -11,6 +11,7 @@ import seaborn as sns
 import pickle
 import os
 from typing import Optional
+from warnings import warn
 
 
 class FlowEngine:
@@ -122,6 +123,9 @@ class FlowEngine:
         sample['well'] = well_specifier
         sample['data_address'] = data_address
 
+        if 'plate' not in well_specifier:
+            well_specifier['plate'] = 'A'
+
         gate_counts = self.gate_counts_for_sample_data(data_address)
 
         sample['gate_counts'] = gate_counts
@@ -184,6 +188,60 @@ class FlowEngine:
         else:
             print('Sample not found in workspace: %s' % data_address)
             return None
+        
+    def get_sample_by_index(self, index: int = 0):
+        
+        sid = self.wsp.get_sample_ids()[index]
+        return self.wsp.get_sample(sid)
+    
+    def get_all_gates(self):
+        # Get the gating strategy
+        sample_id = self.wsp.get_sample_ids()[0]
+
+        gating_results = self.wsp.get_analysis_report()
+
+        sample_results = gating_results[gating_results['sample'] == sample_id]
+
+        gates = sample_results['gate_name'].unique()
+
+        return gates
+
+    def run_autoingestion(self, species_list=None):
+        """
+        Attempt to automatically parse out well and timepoint information from the sample_ids imported from Flowjo.
+        
+        Parameters
+        ----------
+        species_list : list, optional
+            List of species to include in the analysis. If None, will include all species.
+
+        """
+        sids = self.wsp.get_sample_ids()
+
+        # we assume that there is a t=%i field and that the last word in the sample_id is the well id
+        print('FlowTx attempting to run autoingestion. This functionality assumes that there is a t=%i field in the sample_id and that the last word in the sample_id is the well id.')
+        warn('Note that autoingestion will likely result in undefined behavior if there are multiple plates per timepoint.')
+
+        if not species_list:
+            species_list = self.get_all_gates()
+
+        for sid in sids:
+
+            timepoint = int(sid.split('t=')[-1].split(' ')[0])
+            well_id = sid.split(' ')[-1]
+
+            well_spec = {
+                'well': well_id,
+                'timepoint': timepoint,
+                'species_list': species_list
+            }
+
+            self.add_sample(condition_specifier={}, well_specifier=well_spec, data_address=sid)
+
+
+            
+        
+
 
     def plot_timecourses(self, rows_field, cols_field, fields_to_plot, time_col, gate_cols_prefix=None, df=None, twinax=True):
         """
@@ -232,7 +290,11 @@ class FlowEngine:
 
         for j, col_name in enumerate(col_values):
             for i, row_name in enumerate(row_values):
-                ax = axs[i, j]
+                if axs.ndim == 1:
+                    ax = axs[j]
+                else:
+                    ax = axs[i, j]
+                    
                 ax.set_title('%s \n %s' % (col_name, row_name))
 
                 if twinax:
@@ -457,7 +519,11 @@ class FlowEngine:
 
         for j, col_name in enumerate(col_values):
             for i, row_name in enumerate(row_values):
-                ax = axs[i, j]
+                if axs.ndim == 1:
+                    ax = axs[j]
+                else:
+                    ax = axs[i, j]
+
                 ax.set_title('%s \n %s' % (col_name, row_name))
 
                 target = self.df[(self.df[cols_field] == col_name) & (self.df[rows_field] ==
@@ -521,13 +587,16 @@ class FlowEngine:
 
     @staticmethod
     def normalize_data(df):
+        condition_cols = [col for col in df.columns if 'condition' in col]
+        if len(condition_cols) == 0:
+            raise ValueError('No condition columns found in the dataframe. See the docs section on `(2) Associating the Plate/Experiment Map`')
 
         def compute_normalization_factors(df):
             # Filter for timepoint zero
             timepoint_zero = df[df['well timepoint'] == np.min(df['well timepoint'])]
 
-            # Compute mean for each combination of `condition effectors` and `condition condition`
-            mean_values = timepoint_zero.groupby(['condition effectors', 'condition condition']).mean(numeric_only=True).reset_index()
+            # Compute mean for each combination of condition values
+            mean_values = timepoint_zero.groupby(condition_cols).mean(numeric_only=True).reset_index()
 
             return mean_values
 
@@ -541,8 +610,8 @@ class FlowEngine:
             new_col_name = f"normalized_{col}"
 
             normalized_df = pd.merge(normalized_df,
-                                     mean_values[['condition effectors', 'condition condition', col]],
-                                     on=['condition effectors', 'condition condition'],
+                                     mean_values[condition_cols + [col]],
+                                     on=condition_cols,
                                      how='left',
                                      suffixes=('', '_mean'))
 
@@ -556,6 +625,7 @@ class FlowEngine:
         """
         Normalize the counts by the counts at timepoint zero.
         """
+        print('FlowTx normalizing gate counts. This will create a normalized_gate_count column for each existing gate_counts column. Values are calculated by dividing the gate_counts value for each timepoint by the mean gate_counts from the earliest timepoint.')
         self.df = self.normalize_data(self.df)
 
     def visualize_raw_counts(self, counts_col, timepoint=None, df=None, iqr_fold=1.5):
@@ -650,7 +720,7 @@ class FlowEngine:
             df = self.df
 
         # concatenate all the species_lists and then get the unique values
-        species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+        species_list = np.unique(np.concatenate(df['well species_list'].to_list()))
 
         return species_list
 
@@ -673,7 +743,7 @@ class FlowEngine:
         df = df[df['condition effectors'].isin(effectors_list)]
 
         # concatenate all the species_lists and then get the unique values
-        total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+        total_species_list = np.unique(np.concatenate(df['well species_list'].to_list()))
 
         # Retrieve the color cycle from the current matplotlib style
         color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -695,7 +765,7 @@ class FlowEngine:
 
             for i, species in enumerate(total_species_list):
                 try:
-                    if species not in tdf['condition species_list'].iloc[0]:
+                    if species not in tdf['well species_list'].iloc[0]:
                         continue
                     for j, effector_condition in enumerate(tdf['condition effectors'].unique()):
                         sdf = tdf[tdf['condition effectors'] == effector_condition]
@@ -759,7 +829,7 @@ class FlowEngine:
         df = df[df['condition effectors'].isin(effectors_list)]
 
         # concatenate all the species_lists and then get the unique values
-        total_species_list = np.unique(np.concatenate(df['condition species_list'].to_list()))
+        total_species_list = np.unique(np.concatenate(df['well species_list'].to_list()))
 
         # Retrieve the color cycle from the current matplotlib style
         color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -782,10 +852,10 @@ class FlowEngine:
             for i, species in enumerate(total_species_list):
                 for j, condition in enumerate(unique_conditions):
                     cdf = edf[edf['condition condition'] == condition]
-                    if len(cdf['condition species_list']) == 0:
+                    if len(cdf['well species_list']) == 0:
                         continue
 
-                    if species not in cdf['condition species_list'].iloc[0]:
+                    if species not in cdf['well species_list'].iloc[0]:
                         continue
 
                     cdf = cdf.dropna(subset=['well timepoint', 'normalized_gate_counts count %s' % species])
@@ -819,3 +889,394 @@ class FlowEngine:
             figs.append(fig)
 
         return figs
+
+
+    # -----
+
+    def plot_plate_counts_heatmaps(self, timepoint=None, species_to_plot=None, figsize=(12, 6), cmap='inferno'):
+        """
+        Plot heatmaps depicting the counts for each species in each plate.
+        This will reflect the raw plate layout and return Matplotlib figure objects.
+
+        Parameters
+        ----------
+        timepoint : int, optional
+            The timepoint to visualize. If None, will visualize all timepoints.
+
+        species_to_plot : List[str], optional
+            List of species to plot. If None, will plot all species.
+
+        figsize : tuple, optional
+            Size of each heatmap figure, default is (12, 6).
+
+        cmap : str, optional
+            Colormap for the heatmap, default is 'inferno'.
+
+        Returns
+        -------
+        List[matplotlib.figure.Figure]
+            A list of Matplotlib figure objects for each heatmap generated.
+        """
+        # Assemble timepoints
+        if timepoint is None:
+            timepoints = sorted(self.df['well timepoint'].unique())
+        else:
+            timepoints = [timepoint]
+
+        # Assemble species
+        if species_to_plot is None:
+            species_to_plot = self.get_total_species_list()
+
+        # Create a list to store figures
+        figures = []
+
+        plates = self.df['well plate'].unique()
+
+        # Iterate over timepoints and species
+        for t in timepoints:
+            for plate in plates:
+                for species in species_to_plot:
+                    # Filter dataframe for the current timepoint
+                    df = self.df[(self.df['well timepoint'] == t) & (self.df['well plate'] == plate)].copy()
+                    
+                    # Add row and col
+                    df['row'] = df['well well'].apply(lambda x: ord(x[0]) - 65)
+                    df['col'] = df['well well'].apply(lambda x: int(x[1:]) - 1)
+
+                    # Create a matrix for the heatmap
+                    plate_layout = np.full((8, 12), np.nan)  # Initialize with NaN
+                    for _, row in df.iterrows():
+                        plate_layout[row['row'], row['col']] = row[f'gate_counts count {species}']
+
+                    # Create the figure
+                    fig, ax = plt.subplots(figsize=figsize)
+                    sns.heatmap(plate_layout, annot=True, fmt=".0f", cmap=cmap, linewidths=0.5, ax=ax)
+                    ax.set_title(f'Counts for Plate {plate} Species {species} (t={t})', fontweight='bold')
+                    ax.set_xlabel('Column')
+                    ax.set_ylabel('Row')
+                    ax.set_yticks(np.arange(0.5, 8), labels=[chr(i) for i in range(65, 65 + 8)])
+                    ax.set_xticks(np.arange(0.5, 12), labels=np.arange(1, 13))
+                    
+                    # Add figure to the list
+                    figures.append(fig)
+        
+        return figures
+
+    def plot_bicategorical_timecourses(self, x_categorical, y_categorical, species_1, species_2=None, normalized=False,
+                                       x_categorical_label=None, y_categorical_label=None, title=None):
+        """
+        Plot a grid of timecourses for each value of x_categorical and y_categorical for species_1 and species_2.
+        Species_1 will be plotted on the left y-axis, and if specified species_2 will be plotted on the right y-axis.
+
+        Parameters
+        ----------
+        x_categorical : list
+            The list of values for the x-axis categorical variable.
+        y_categorical : list
+            The list of values for the y-axis categorical variable.
+        species_1 : str
+            The species to plot on the left y-axis.
+        species_2 : str, optional
+            The species to plot on the right y-axis. If None, only species_1 is plotted.
+        normalized : bool, optional
+            Whether to plot normalized counts. Default is False.
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        # Determine global min and max for species_2 if specified
+        if species_2:
+            species_2_handle = f'normalized_gate_counts count {species_2}' if normalized else f'gate_counts count {species_2}'
+            species_2_data = self.df[species_2_handle]
+            global_min_species_2 = species_2_data.min()
+            global_max_species_2 = species_2_data.max()
+
+        # Create a 2D array of Axes objects for left y-axes
+        fig, axs = plt.subplots(
+            len(y_categorical), len(x_categorical),
+            figsize=(3 * len(x_categorical), 3 * len(y_categorical)),
+            squeeze=False,
+            sharex=True,  # Share x-axes
+            sharey=True   # Share left y-axes
+        )
+
+        # Initialize a list to store legend handles and labels
+        handles = []
+        labels = []
+
+        # Loop through rows (y_categorical) and columns (x_categorical)
+        for i, y in enumerate(y_categorical):
+            for j, x in enumerate(x_categorical):
+                ax_left = axs[i, j]
+
+                # Plot the first species on the left y-axis
+                species_1_handle = f'normalized_gate_counts count {species_1}' if normalized else f'gate_counts count {species_1}'
+                line_left = sns.lineplot(
+                    data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                    x='well timepoint', y=species_1_handle, ax=ax_left, legend=False
+                )
+                scatter_left = sns.scatterplot(
+                    data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                    x='well timepoint', y=species_1_handle, ax=ax_left,
+                    color=line_left.get_lines()[-1].get_color(), alpha=0.6, s=30, legend=False
+                )
+
+                # Capture legend entries (only once for the first subplot)
+                if i == 0 and j == 0:
+                    handles.append(line_left.get_lines()[0])
+                    labels.append(f'{species_1}')
+                    # handles.append(scatter_left.collections[0])
+                    # labels.append(f'{species_1} (points)')
+
+                ax_left.set_ylabel(f'Counts ({species_1})', color=line_left.get_lines()[-1].get_color())
+                ax_left.set_xlabel('Time (hours)')
+                ax_left.tick_params(axis='y', colors=line_left.get_lines()[-1].get_color())
+                ax_left.set_title(f'{y} {x}')
+
+                # If a second species is specified, use a twin axis
+                if species_2:
+                    ax_right = ax_left.twinx()
+                    line_right = sns.lineplot(
+                        data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                        x='well timepoint', y=species_2_handle, ax=ax_right, color='r', legend=False
+                    )
+                    scatter_right = sns.scatterplot(
+                        data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                        x='well timepoint', y=species_2_handle, ax=ax_right,
+                        color=line_right.get_lines()[-1].get_color(), alpha=0.6, s=30, legend=False
+                    )
+
+                    # Set shared y-axis limits for the twin y-axis
+                    ax_right.set_ylim(global_min_species_2, global_max_species_2)
+
+                    # Enable the spine on the right side (y-axis line for twinax)
+                    ax_right.spines['right'].set_visible(True)
+                    ax_right.spines['right'].set_linewidth(1)
+
+                    # Capture legend entries for the second species (only once)
+                    if i == 0 and j == 0:
+                        handles.append(line_right.get_lines()[0])
+                        labels.append(f'{species_2}')
+                        # handles.append(scatter_right.collections[0])
+                        # labels.append(f'{species_2} (points)')
+
+                    # Color the right y-axis label and ticks
+                    ax_right.set_ylabel(f'Counts ({species_2})', color=line_right.get_lines()[-1].get_color())
+                    ax_right.tick_params(axis='y', colors=line_right.get_lines()[-1].get_color())
+
+        # Create a unified legend
+        fig.legend(handles, labels, loc='center right', title='Legend', bbox_to_anchor=(1.1, 0.5), borderaxespad=0)
+
+        # Add master x-axis and y-axis labels
+        if x_categorical_label:
+            fig.text(0.5, -0.04, x_categorical_label, ha='center', va='center', fontsize=16)
+
+        if y_categorical_label:
+            fig.text(-0.01, 0.5, y_categorical_label, ha='center', va='center', rotation='vertical', fontsize=16)
+
+        if title:
+            fig.suptitle(title, fontsize=24)
+        # fig.text(0.5, -0.04, 'T Cell Design', ha='center', va='center', fontsize=16)  # Master x-axis
+        # fig.text(-0.01, 0.5, 'Additive', ha='center', va='center', rotation='vertical', fontsize=16)  # Master y-axis
+
+        # Adjust layout to make room for the legend
+        fig.tight_layout()
+
+        return fig
+
+    def barplot_counts_for_timepoint(self, timepoint, x_categorical, hue_categorical, species_list, normalized=False,
+                                     x_axis_label=None, y_axis_label=None, title=None):
+        """
+        Plot barplots for each species in species_list for each value of x_categorical. There will be a bar for each value
+        of hue_categorical.
+
+        Parameters
+        ----------
+        timepoint : int
+            The timepoint to visualize.
+
+        x_categorical : str
+            The column name for the x-axis categorical variable.
+
+        hue_categorical : str
+            The column name for the hue categorical variable.
+
+        species_list : list
+            List of species to plot.
+
+        normalized : bool, optional
+            Whether to plot normalized counts. Default is False.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The generated Matplotlib figure object.
+
+        
+        """
+        figs = []
+        for i, s_name in enumerate(species_list):
+            df = self.df[(self.df['well timepoint'] == timepoint)]
+
+            fig, ax = plt.subplots(figsize=(15, 5))
+
+            if normalized:
+                gate_col = 'normalized_gate_counts count %s' % s_name
+            else:
+                gate_col = 'gate_counts count %s' % s_name
+
+            # Get the current Matplotlib color cycle
+            color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            num_colors = len(color_cycle)
+
+            # Offset the starting position in the color cycle
+            offset = i * len(df[hue_categorical].unique())
+
+            # Generate a palette for hues based on the offset color cycle
+            unique_hues = df[hue_categorical].unique()
+            hue_palette = {
+                hue: color_cycle[(offset + j) % num_colors] for j, hue in enumerate(unique_hues)
+            }
+
+            # Create barplot with the specified palette
+            sns.barplot(
+                data=df, x=x_categorical, y=gate_col, hue=hue_categorical, ax=ax,
+                palette=hue_palette
+            )
+
+            # Create swarmplot with the same palette (to match bar colors)
+            sns.swarmplot(
+                data=df, x=x_categorical, y=gate_col, hue=hue_categorical, ax=ax,
+                dodge=True, palette=hue_palette
+            )
+
+            # Rotate x-axis labels
+            plt.xticks(rotation=45, ha='right')
+
+            # Adjust legend location and bounding box
+            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+
+            # Set title
+            if not title:
+                plt.title('t=%i | Species: %s' % (timepoint, s_name), color=color_cycle[offset % num_colors], fontsize=24)
+            else:
+                plt.title(title, color=color_cycle[offset % num_colors])
+            
+            # Set axis labels
+            if x_axis_label:
+                plt.xlabel(x_axis_label)
+
+            if y_axis_label:
+                plt.ylabel(y_axis_label)
+
+            figs.append(fig)
+
+        return figs
+
+    def plot_2d_species_scatter_for_timepoint(self, timepoint, x_species, y_species, normalized=False, color_palette='deep', 
+                                              color_by='condition effectors', override_uniform_color=None, color_labels=True,
+                                              plot_title=None):
+        """
+        Plot a 2D scatterplot for two species at a given timepoint.
+
+        Parameters
+        ----------
+        timepoint : int
+            The timepoint to visualize.
+        
+        x_species : str
+            The species to plot on the x-axis
+
+        y_species : str
+            The species to plot on the y-axis
+
+        normalized : bool, optional
+            Whether to plot normalized counts. Default is False.
+
+        color_palette : str, optional
+            The name of the color palette to use. Default is 'deep'.
+
+        color_by : str, optional
+            The column name to use for coloring the points. Default is 'condition effectors'.
+
+        override_uniform_color : str, optional
+            If specified, all points will be colored uniformly with the specified color.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The generated Matplotlib figure object.
+
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from adjustText import adjust_text
+
+
+
+        # Filter the DataFrame for the specified conditions
+        fx_df = self.df
+        fx_df = fx_df[fx_df['well timepoint'] == timepoint]
+
+        # Calculate the mean and standard deviation for each condition effectors group
+        if normalized:
+            x_gate_col = 'normalized gate_counts count %s' % x_species
+            y_gate_col = 'normalized gate_counts count %s' % y_species
+        else:
+            x_gate_col = 'gate_counts count %s' % x_species
+            y_gate_col = 'gate_counts count %s' % y_species
+
+        summary_df = fx_df.groupby('condition effectors').agg(
+            mean_x=(x_gate_col, 'mean'),
+            std_x=(x_gate_col, 'std'),
+            mean_y=(y_gate_col, 'mean'),
+            std_y=(y_gate_col, 'std')
+        ).reset_index()
+
+        # Create the plot
+        fig = plt.figure(figsize=(8, 8), dpi=300)
+
+        # Define coloring logic
+        if not override_uniform_color:
+            palette = sns.color_palette(color_palette, n_colors=summary_df.shape[0])
+            colors = {condition: palette[i] for i, condition in enumerate(summary_df[color_by])}
+        else:
+            colors = {condition: override_uniform_color for condition in summary_df[color_by]}
+
+        # Use plt.errorbar to plot data points with error bars
+        texts = []  # Store text objects for adjust_text
+        for i, row in summary_df.iterrows():
+            plt.errorbar(
+                row['mean_x'], row['mean_y'],
+                xerr=row['std_x'], yerr=row['std_y'],
+                fmt='o', color=colors[row['condition effectors']],
+                capsize=0, alpha=1, elinewidth=2,
+                label=row['condition effectors']
+            )
+            
+            # Add text labels, adjusted later
+            text = plt.text(
+                row['mean_x'], row['mean_y'], row['condition effectors'],
+                fontsize=9, va='center', ha='center',
+                color=colors[row['condition effectors']] if color_labels else 'black'
+            )
+            texts.append(text)
+
+        # Adjust text labels to prevent overlap
+        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+
+        # Customize the plot
+        plt.xlabel(x_species)
+        plt.ylabel(y_species)
+        if not plot_title:
+            plt.title('Scatter of %s vs %s at t=%s' % (x_species, y_species, timepoint))
+        else:
+            plt.title(plot_title)
+        # plt.legend(title='Condition Effectors', bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.tight_layout()
+
+        return fig
+
+
+
+
