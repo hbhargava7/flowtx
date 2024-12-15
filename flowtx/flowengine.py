@@ -1255,15 +1255,21 @@ class FlowEngine:
             )
             
             # Add text labels, adjusted later
-            text = plt.text(
-                row['mean_x'], row['mean_y'], row['condition effectors'],
-                fontsize=9, va='center', ha='center',
-                color=colors[row['condition effectors']] if color_labels else 'black'
-            )
+            ax = plt.gca()
+            text = ax.annotate(
+                    row['condition effectors'],
+                    xy=(row['mean_x'], row['mean_y']),  # Anchor text at the data point
+                    xytext=(row['mean_x'], row['mean_y']),  # No offsets
+                    fontsize=9,
+                    color=colors[row['condition effectors']] if color_labels else 'black',
+                    ha='center', va='center',  # Center alignment
+                )
             texts.append(text)
 
         # Adjust text labels to prevent overlap
-        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', lw=0.8),
+                    expand=(1.2, 2))  # Expand to avoid overlap,
+                    # expand_objects=(1, 2))
 
         # Customize the plot
         plt.xlabel(x_species)

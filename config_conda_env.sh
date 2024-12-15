@@ -13,7 +13,7 @@ conda activate flowtx
 cat requirements.txt | sed -e '/^\s*#.*$/d' -e '/^\s*$/d' | xargs -n 1 pip install --no-cache-dir
 
 # Install flowkit without deps because of sns version clash
-pip install --no-deps git+https://github.com/hbhargava7/flowkit@hkb-add-autoread-fcs-from-flowjo
+# pip install --no-deps git+https://github.com/hbhargava7/flowkit@hkb-add-autoread-fcs-from-flowjo
 
 # Install FlowTx itself.
 pip install -e .
