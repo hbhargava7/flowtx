@@ -1085,7 +1085,7 @@ class FlowEngine:
         return fig
 
     def barplot_counts_for_timepoint(self, timepoint, x_categorical, hue_categorical, species_list, normalized=False,
-                                     x_axis_label=None, y_axis_label=None, title=None):
+                                     x_axis_label=None, y_axis_label=None, title=None, figsize=(15,5)):
         """
         Plot barplots for each species in species_list for each value of x_categorical. There will be a bar for each value
         of hue_categorical.
@@ -1115,10 +1115,15 @@ class FlowEngine:
         
         """
         figs = []
+
+        # tolerate a single species name for species list
+        if isinstance(species_list, str):
+            species_list = [species_list]
+
         for i, s_name in enumerate(species_list):
             df = self.df[(self.df['well timepoint'] == timepoint)]
 
-            fig, ax = plt.subplots(figsize=(15, 5))
+            fig, ax = plt.subplots(figsize=figsize)
 
             if normalized:
                 gate_col = 'normalized_gate_counts count %s' % s_name
@@ -1146,15 +1151,18 @@ class FlowEngine:
 
             # Create swarmplot with the same palette (to match bar colors)
             sns.swarmplot(
+                # data=df, x=x_categorical, y=gate_col, hue=hue_categorical, ax=ax,
+                # dodge=True, palette=hue_palette
+
                 data=df, x=x_categorical, y=gate_col, hue=hue_categorical, ax=ax,
-                dodge=True, palette=hue_palette
+                dodge=True, palette=None, color='grey'
             )
 
             # Rotate x-axis labels
             plt.xticks(rotation=45, ha='right')
 
             # Adjust legend location and bounding box
-            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+            plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=hue_categorical)
 
             # Set title
             if not title:
