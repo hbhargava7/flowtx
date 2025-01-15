@@ -962,7 +962,7 @@ class FlowEngine:
         
         return figures
 
-    def plot_bicategorical_timecourses(self, x_categorical, y_categorical, species_1, species_2=None, normalized=False,
+    def plot_bicategorical_timecourses(self, x_categorical_col, y_categorical_col, species_1, species_2=None, normalized=False,
                                        x_categorical_label=None, y_categorical_label=None, title=None):
         """
         Plot a grid of timecourses for each value of x_categorical and y_categorical for species_1 and species_2.
@@ -970,9 +970,13 @@ class FlowEngine:
 
         Parameters
         ----------
-        x_categorical : list
+        x_categorical_col : str
+            The column name of the x-axis categorical variable.
+        y_categorical_col : str
+            The column name of the y-axis categorical variable.
+        x_categorical_values : list
             The list of values for the x-axis categorical variable.
-        y_categorical : list
+        y_categorical_values : list
             The list of values for the y-axis categorical variable.
         species_1 : str
             The species to plot on the left y-axis.
@@ -983,6 +987,9 @@ class FlowEngine:
         """
         import matplotlib.pyplot as plt
         import seaborn as sns
+
+        x_categorical = self.df[x_categorical_col].unique()
+        y_categorical = self.df[y_categorical_col].unique()
 
         # Determine global min and max for species_2 if specified
         if species_2:
@@ -1004,6 +1011,8 @@ class FlowEngine:
         handles = []
         labels = []
 
+
+
         # Loop through rows (y_categorical) and columns (x_categorical)
         for i, y in enumerate(y_categorical):
             for j, x in enumerate(x_categorical):
@@ -1012,11 +1021,11 @@ class FlowEngine:
                 # Plot the first species on the left y-axis
                 species_1_handle = f'normalized_gate_counts count {species_1}' if normalized else f'gate_counts count {species_1}'
                 line_left = sns.lineplot(
-                    data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                    data=self.df[(self.df[y_categorical_col] == y) & (self.df[x_categorical_col] == x)],
                     x='well timepoint', y=species_1_handle, ax=ax_left, legend=False
                 )
                 scatter_left = sns.scatterplot(
-                    data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                    data=self.df[(self.df[y_categorical_col] == y) & (self.df[x_categorical_col] == x)],
                     x='well timepoint', y=species_1_handle, ax=ax_left,
                     color=line_left.get_lines()[-1].get_color(), alpha=0.6, s=30, legend=False
                 )
@@ -1037,11 +1046,11 @@ class FlowEngine:
                 if species_2:
                     ax_right = ax_left.twinx()
                     line_right = sns.lineplot(
-                        data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                        data=self.df[(self.df[y_categorical_col] == y) & (self.df[x_categorical_col] == x)],
                         x='well timepoint', y=species_2_handle, ax=ax_right, color='r', legend=False
                     )
                     scatter_right = sns.scatterplot(
-                        data=self.df[(self.df['condition condition'] == y) & (self.df['condition effectors'] == x)],
+                        data=self.df[(self.df[y_categorical_col] == y) & (self.df[x_categorical_col] == x)],
                         x='well timepoint', y=species_2_handle, ax=ax_right,
                         color=line_right.get_lines()[-1].get_color(), alpha=0.6, s=30, legend=False
                     )
@@ -1183,7 +1192,7 @@ class FlowEngine:
 
     def plot_2d_species_scatter_for_timepoint(self, timepoint, x_species, y_species, df=None, normalized=False, color_palette='deep', 
                                               color_by='condition effectors', override_uniform_color=None, color_labels=True,
-                                              plot_title=None):
+                                              plot_title=None, figsize=(8,8), log=False):
         """
         Plot a 2D scatterplot for two species at a given timepoint.
 
@@ -1234,8 +1243,8 @@ class FlowEngine:
 
         # Calculate the mean and standard deviation for each condition effectors group
         if normalized:
-            x_gate_col = 'normalized gate_counts count %s' % x_species
-            y_gate_col = 'normalized gate_counts count %s' % y_species
+            x_gate_col = 'normalized_gate_counts count %s' % x_species
+            y_gate_col = 'normalized_gate_counts count %s' % y_species
         else:
             x_gate_col = 'gate_counts count %s' % x_species
             y_gate_col = 'gate_counts count %s' % y_species
@@ -1256,7 +1265,7 @@ class FlowEngine:
         ).reset_index()
 
         # Create the plot
-        fig = plt.figure(figsize=(8, 8), dpi=300)
+        fig = plt.figure(figsize=figsize, dpi=300)
 
         # Define coloring logic
         if not override_uniform_color:
@@ -1278,6 +1287,10 @@ class FlowEngine:
             
             # Add text labels, adjusted later
             ax = plt.gca()
+            if log:
+                ax.set_xscale('log')
+                ax.set_yscale('log')
+
             text = ax.annotate(
                     row['condition effectors'],
                     xy=(row['mean_x'], row['mean_y']),  # Anchor text at the data point
