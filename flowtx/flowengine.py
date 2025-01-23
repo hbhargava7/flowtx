@@ -938,7 +938,9 @@ class FlowEngine:
                 for species in species_to_plot:
                     # Filter dataframe for the current timepoint
                     df = self.df[(self.df['well timepoint'] == t) & (self.df['well plate'] == plate)].copy()
-                    
+                    if len(df) == 0:
+                        print('No data found for Plate %s Species %s (t=%s)' % (plate, species, t))
+                        continue
                     # Add row and col
                     df['row'] = df['well well'].apply(lambda x: ord(x[0]) - 65)
                     df['col'] = df['well well'].apply(lambda x: int(x[1:]) - 1)
