@@ -375,10 +375,22 @@ class FlowEngine:
 
         return fig
 
-    def get_raw_events_for_sample(self, sample_id, channel_name, gate_name, transform=False):
+    def get_raw_events_for_sample(self, sample_id, channel_name, gate_name, transform=False, compensation_matrix=None):
+        """
+        Get the raw events for a sample.
+
+        Sample id should correspond with 
+        """
         sample = self.wsp.get_sample(sample_id)
+        if compensation_matrix:
+            sample.apply_compensation(compensation_matrix)
+
         channel_index = sample.get_channel_index(channel_name)
-        x = sample.get_channel_events(channel_index, source='raw', subsample=False)
+
+        source = 'raw'
+        if compensation_matrix:
+            source = 'comp'
+        x = sample.get_channel_events(channel_index, source=source, subsample=False)
 
         # for transform
         if transform:
